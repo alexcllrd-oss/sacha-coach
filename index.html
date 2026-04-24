@@ -28,22 +28,24 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body {
+html {
   height: 100%;
+  height: -webkit-fill-available;
+}
+
+body {
+  height: 100%;
+  height: -webkit-fill-available;
   font-family: var(--sans);
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
-}
-
-body {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  min-height: -webkit-fill-available;
   padding: 24px 16px;
+  margin: 0;
 }
 
 @media (max-width: 600px) {
@@ -67,8 +69,9 @@ body {
 @media (max-width: 600px) {
   .shell {
     gap: 0;
-    height: 100vh;
+    height: 100%;
     height: -webkit-fill-available;
+    max-height: -webkit-fill-available;
   }
 }
 
@@ -180,7 +183,8 @@ body {
     border: none;
     border-radius: 0;
     flex: 1;
-    height: auto;
+    height: 0; /* Critical: forces flex child to respect parent height on iOS */
+    min-height: 0;
     box-shadow: none;
   }
 }
@@ -188,8 +192,10 @@ body {
 /* ── Messages ── */
 .messages {
   flex: 1;
+  min-height: 0; /* Critical for iOS flex scroll */
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: 24px 20px 12px;
   display: flex;
   flex-direction: column;
@@ -1088,7 +1094,7 @@ window.addEventListener('load', () => {
   if (userName && userPronom) {
     // ── Utilisateur connu : on recharge l'historique ──
     sessionCount++;
-    window._systemSuffix = '\n\nINFO UTILISATEUR : Prénom = ' + userName + '. Pronom préféré = ' + userPronom + '. Utilise son prénom de temps en temps, et respecte son pronom dans tes formulations. Session numéro ' + sessionCount + '. Tu as accès à tout l\'historique de vos échanges précédents dans la conversation ci-dessus.';
+    window._systemSuffix = '\n\nINFO UTILISATEUR : Prénom = ' + userName + '. Pronom préféré = ' + userPronom + '. Utilise son prénom de temps en temps, et respecte son pronom dans tes formulations. Session numéro ' + sessionCount + '.';
     saveMemory({ userName, userPronom, history, sessionCount });
 
     // Réaffiche l'historique existant visuellement
@@ -1097,25 +1103,13 @@ window.addEventListener('load', () => {
         if (msg.role === 'user') addBubble('user', msg.content);
         else if (msg.role === 'assistant') addBubble('sacha', msg.content);
       });
-      // Scroll en bas après affichage historique
-      setTimeout(scrollBottom, 200);
+      setTimeout(scrollBottom, 300);
     }
 
-    // Message de retrouvailles — ajouté à l'historique pour que Claude ait le contexte
-    const greetingText = [
-      "Contente de te retrouver, " + userName + " ! 🌿 Comment tu vas depuis la dernière fois ? On reprend là où on s'était arrêté·e, ou tu as envie de parler d'autre chose ?",
-      "Ah, " + userName + " ! Ravie de te revoir par ici. Comment tu vas ? Qu'est-ce qui t'amène aujourd'hui ?",
-      "Bonjour " + userName + " ! Je suis contente que tu sois là. Comment s'est passé ce qu'on avait évoqué ensemble ? Tu veux continuer ou aborder autre chose ?"
-    ][Math.floor(Math.random() * 3)];
-
-    setTimeout(() => {
-      // On ajoute le message de retrouvailles à l'historique
-      history.push({ role: 'assistant', content: greetingText });
-      saveMemory({ userName, userPronom, history, sessionCount });
-      addBubble('sacha', greetingText,
-        ["On reprend là où on s'était arrêté·e", "J'ai envie de parler d'autre chose", "Je veux juste faire un point"]
-      );
-    }, 300);
+    // Pas de message automatique — c'est l'utilisateur qui reprend la main
+    // Juste un petit placeholder pour guider
+    inputEl.placeholder = "Bonjour Sacha, on reprend ?";
+    setTimeout(() => { inputEl.placeholder = "Écris à Sacha…"; }, 5000);
 
   } else {
     // ── Nouvel utilisateur : onboarding complet ──
