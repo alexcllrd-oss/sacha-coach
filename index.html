@@ -1150,6 +1150,13 @@ const EXERCISES = {
     desc: "Identifier ce qui motive vraiment la personne en analysant les moments épanouissants et moins épanouissants de sa carrière.",
     duree: "60 min",
     niveau: "Guidé par le coach"
+  },
+  EX004: {
+    tag: "Carrière · 30 min",
+    title: "La journée idéale",
+    desc: "Décrire sa journée parfaite pour comprendre ce qui manque, ce qu'on désire vraiment et débloquer le coaching.",
+    duree: "30 min",
+    niveau: "Guidé par le coach"
   }
 };
 
@@ -1258,7 +1265,11 @@ function addBubble(role, text, quickReplies) {
   const clean = text.replace(/\[EXERCICE:\w+\]/g, '').trim();
   const bubble = document.createElement('div');
   bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'sacha');
-  bubble.innerHTML = clean.replace(/\n/g, '<br>');
+  // Render **bold** markdown and newlines
+  const rendered = clean
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+  bubble.innerHTML = rendered;
   wrap.appendChild(bubble);
 
   const exMatch = text.match(/\[EXERCICE:(\w+)\]/);
@@ -1308,6 +1319,20 @@ function showTyping() {
 function removeTyping() {
   const el = document.getElementById('typingRow');
   if (el) el.remove();
+}
+
+function buildCleanHistory() {
+  const clean = [];
+  let lastRole = null;
+  for (const m of history) {
+    if (m.role === lastRole) continue;
+    if (m.role !== 'user' && m.role !== 'assistant') continue;
+    if (m.content === '__returning_user__') continue; // filter hidden trigger
+    clean.push({ role: m.role, content: m.content });
+    lastRole = m.role;
+  }
+  while (clean.length > 0 && clean[0].role !== 'user') clean.shift();
+  return clean;
 }
 
 async function callClaude(msg) {
@@ -1563,6 +1588,7 @@ function launchExercise(exId) {
       EX001: "Je veux faire l'exercice Clarification d'objectif",
       EX002: "Je veux faire l'exercice Pyramide des niveaux logiques",
       EX003: "Je veux faire l'exercice Courbe d'épanouissement",
+      EX004: "Je veux faire l'exercice La journée idéale",
     };
     const msg = labels[exId] || "Je veux faire un exercice";
     addBubble('user', msg);
@@ -1649,10 +1675,35 @@ window.addEventListener('load', () => {
       setTimeout(scrollBottom, 300);
     }
 
-    // Pas de message automatique — c'est l'utilisateur qui reprend la main
-    // Juste un petit placeholder pour guider
-    inputEl.placeholder = "Bonjour Sacha, on reprend ?";
-    setTimeout(() => { inputEl.placeholder = "Écris à Sacha…"; }, 5000);
+    // Sacha accueille chaleureusement via l'API avec le contexte de l'historique
+    setTimeout(() => {
+      const welcomeBack = "__returning_user__";
+      history.push({ role: 'user', content: welcomeBack });
+      // Build clean history for API
+      const cleanHistory = buildCleanHistory();
+      // Call Claude directly with a hidden trigger
+      fetch('https://sacha-api.alexandra-coillard.workers.dev/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 1000,
+          system: SYSTEM + (window._systemSuffix || '') + "\n\nL\'utilisateur revient sur l\'appli. Accueille-le chaleureusement par son prénom, demande-lui comment il/elle se sent aujourd\'hui. Ne propose rien d\'autre pour l\'instant — attends sa réponse.",
+          messages: cleanHistory
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        const reply = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+        history.push({ role: 'assistant', content: reply });
+        saveMemory({ userName, userPronom, history, sessionCount, firstDate: loadMemory().firstDate });
+        addBubble('sacha', reply);
+      })
+      .catch(() => {
+        history.pop(); // remove the trigger message on error
+        addBubble('sacha', "Contente de te retrouver, " + userName + " ! 🌿 Comment tu vas aujourd\'hui ?");
+      });
+    }, 400);
 
   } else {
     // ── Nouvel utilisateur : onboarding complet ──
